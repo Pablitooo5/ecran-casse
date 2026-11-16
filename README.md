@@ -60,4 +60,6 @@ Rien n'est envoyé sur Internet. Tout tient dans `~/.claude/ecran-casse` et dans
 Projet perso et non officiel, sans lien avec Anthropic. « Claude » et « Claude Code » sont des marques d'Anthropic.
 Licence MIT : tu peux le modifier et le partager librement.
 
-Du même auteur : [Alerte Contexte](https://github.com/Pablitooo5/alerte-contexte), un chef de chantier qui passe avec une pancarte quand ta conversation Claude Code devient trop lourde.
+Du même auteur :
+- [Alerte Contexte](https://github.com/Pablitooo5/alerte-contexte) : un chef de chantier passe avec une pancarte quand ta conversation Claude Code devient trop lourde.
+- [Le Videur](https://github.com/Pablitooo5/le-videur) : un videur arrête Claude avant une action dangereuse et te demande ton accord.
