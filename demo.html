@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Écran Cassé — démo</title>
+<style>
+  :root { --bg: #f5f4ef; --ink: #1f1e1c; --muted: #6b6862; --line: #e3e0d8; --red: #e5484d; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #060607; font-family: -apple-system, system-ui, sans-serif; }
+
+  #stage { position: fixed; inset: 0; }
+  #stage.shake { animation: shake .35s; }
+  #stage.bigshake { animation: bigshake .7s; }
+  @keyframes shake { 20% { transform: translate(-7px, 4px); } 45% { transform: translate(6px, -5px); } 70% { transform: translate(-3px, 2px); } }
+  @keyframes bigshake {
+    10% { transform: translate(-18px, 10px) rotate(-.6deg); } 25% { transform: translate(16px, -12px) rotate(.5deg); }
+    40% { transform: translate(-12px, 8px); } 60% { transform: translate(8px, -5px); } 80% { transform: translate(-3px, 2px); }
+  }
+
+  /* ---------- Le faux écran de conversation ---------- */
+  .app { position: absolute; inset: 0; background: var(--bg); display: flex; color: var(--ink); }
+  .side { width: 230px; flex: none; background: #efede6; border-right: 1px solid var(--line); padding: 18px 12px; }
+  .side .logo { font-weight: 700; font-size: 16px; padding: 0 10px 18px; }
+  .side .item { padding: 8px 10px; border-radius: 8px; color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side .item.on { background: #e4e1d8; color: var(--ink); }
+  .main { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; min-width: 0; }
+  .chat { width: min(680px, 90%); flex: 1; padding: 74px 0 10px; font-size: 15.5px; line-height: 1.6; overflow: hidden; }
+  .user { margin-left: auto; background: #e9e6dd; padding: 10px 14px; border-radius: 14px; width: fit-content; max-width: 75%; }
+  .who { font-weight: 600; margin-top: 22px; }
+  .reply p { margin: 10px 0; }
+  .reply ol { margin: 8px 0; padding-left: 22px; }
+  .input { width: min(680px, 90%); margin-bottom: 22px; border: 1px solid #d9d5cb; background: #fff; border-radius: 16px; padding: 15px 16px; color: #9a968e; }
+  .pill {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    background: #fff; border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px;
+    font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #3fae5a; }
+  .pill.late { color: #b42318; border-color: #f3b8b0; background: #fff4f2; }
+  .pill.late .dot { background: var(--red); animation: blink .5s infinite alternate; }
+  .pill.ok { color: #1a7f37; border-color: #b7e4c4; background: #f1fbf4; }
+  @keyframes blink { to { opacity: .2; } }
+
+  /* ---------- Fissures ---------- */
+  #cracks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #cracks path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  #cracks .dk { stroke: rgba(25, 25, 28, .72); stroke-width: 2.2; }
+  #cracks .lt { stroke: rgba(255, 255, 255, .95); stroke-width: 1; }
+
+  /* ---------- Éclats de verre ---------- */
+  #shards { position: absolute; inset: 0; pointer-events: none; }
+  .shard { position: absolute; inset: 0; will-change: transform; backface-visibility: hidden; }
+  .shard .app { pointer-events: none; }
+  .shard svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .shard polygon.e1 { fill: rgba(255, 255, 255, .07); stroke: rgba(0, 0, 0, .35); stroke-width: 3.5; }
+  .shard polygon.e2 { fill: none; stroke: rgba(255, 255, 255, .9); stroke-width: 1.4; }
+
+  /* ---------- Derrière l'écran ---------- */
+  #void {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; text-align: center; color: #fff; padding: 0 24px 26vh;
+    background: radial-gradient(ellipse at 45% 45%, #1d1d21 0%, #070708 70%);
+  }
+  #void h1 {
+    margin: 0; font: 900 clamp(38px, 7.4vw, 100px)/.95 Impact, "Arial Black", system-ui; text-transform: uppercase; letter-spacing: .5px;
+    opacity: 0; transform: scale(2.4);
+  }
+  #void h1.red { color: var(--red); }
+  #void.show h1 { opacity: 1; transform: scale(1); transition: transform .3s cubic-bezier(.2, 1.5, .4, 1), opacity .15s; }
+  #void.show h1.red { transition-delay: .35s; }
+  #void p { margin: 6px 0 0; font-size: 19px; color: #c9c6bf; opacity: 0; }
+  #void.show p { opacity: 1; transition: opacity .4s .9s; }
+  #void button { opacity: 0; pointer-events: none; }
+  #void.show button { opacity: 1; pointer-events: auto; transition: opacity .4s 1.3s; }
+
+  button.cta {
+    font: 700 17px -apple-system, system-ui, sans-serif; color: #111; background: #fff; border: 0; border-radius: 12px;
+    padding: 13px 22px; cursor: pointer; box-shadow: 0 6px 0 #9a9a9a;
+  }
+  button.cta:active { transform: translateY(3px); box-shadow: 0 3px 0 #9a9a9a; }
+
+  /* ---------- Le bonhomme ---------- */
+  #man { position: absolute; bottom: 0; z-index: 5; }
+  #man svg { display: block; overflow: visible; filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff); }
+  .legs line { transform-box: view-box; transform-origin: 100px 185px; }
+  .running .legA { animation: run .2s ease-in-out infinite alternate; }
+  .running .legB { animation: run .2s ease-in-out infinite alternate-reverse; }
+  .running .torso { animation: bob .2s infinite alternate; }
+  @keyframes run { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
+  @keyframes bob { to { transform: translateY(-6px); } }
+  .hop .torso, .hop .legs { animation: hop .3s; }
+  @keyframes hop { 50% { transform: translateY(-22px); } }
+  .armR, .armL { transform-box: view-box; transition: transform .16s ease-out; }
+  .armR { transform-origin: 100px 110px; }
+  .armL { transform-origin: 100px 110px; }
+  .windup .armR { transform: rotate(-118deg); }
+  .punch .armR { transform: rotate(-60deg) scale(.55); }
+  .raise .armR { transform: rotate(-168deg); transition-duration: .5s; }
+  .raise .armL, .windup .armL { transform: rotate(25deg); }
+  .hammerHeld { display: none; }
+  .armed .hammerHeld { display: inline; }
+  .armed .fistR { display: none; }
+  .mOpen { display: none; }
+  .talk .mOpen { display: inline; }
+  .talk .mShut { display: none; }
+  .mHappy { display: none; }
+  .happy .mHappy { display: inline; }
+  .happy .mOpen, .happy .mShut, .happy .brows { display: none; }
+
+  /* ---------- Bulles et onomatopées ---------- */
+  .bubble {
+    position: absolute; z-index: 6; background: #fff; color: #111; border: 3px solid #111; border-radius: 24px;
+    padding: 10px 18px 11px; font: 700 23px/1.15 "Chalkboard SE", "Marker Felt", "Comic Sans MS", cursive;
+    white-space: nowrap; box-shadow: 5px 5px 0 rgba(0, 0, 0, .85);
+    transform-origin: calc(100% - 30px) 100%; animation: pop .26s cubic-bezier(.3, 1.7, .5, 1);
+  }
+  .bubble.big { font-size: 32px; padding: 12px 22px; background: #ffe14d; }
+  .bubble::before, .bubble::after { content: ""; position: absolute; border-style: solid; }
+  .bubble::before { right: 22px; top: 100%; border-width: 22px 0 0 16px; border-color: #111 transparent transparent transparent; }
+  .bubble::after { right: 25px; top: calc(100% - 4px); border-width: 16px 0 0 11px; border-color: #fff transparent transparent transparent; }
+  .bubble.big::after { border-top-color: #ffe14d; }
+  .bubble.out { opacity: 0; transform: scale(.85); transition: .2s; }
+  @keyframes pop { from { transform: scale(0) rotate(5deg); } }
+
+  .burst { position: absolute; z-index: 7; transform: translate(-50%, -50%) rotate(var(--rot)); animation: burstIn .2s cubic-bezier(.3, 1.9, .5, 1); pointer-events: none; }
+  .burst svg { display: block; overflow: visible; }
+  .burst span {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; white-space: nowrap;
+    font: italic 900 1em "Chalkboard SE", "Marker Felt", Impact, sans-serif; color: #e63946;
+    -webkit-text-stroke: 1.5px #111; paint-order: stroke fill; text-shadow: 3px 3px 0 #111;
+  }
+  .burst.out { opacity: 0; transform: translate(-50%, -50%) rotate(var(--rot)) scale(1.3); transition: .35s; }
+  @keyframes burstIn { from { transform: translate(-50%, -50%) rotate(var(--rot)) scale(0); } }
+
+  .fly { position: absolute; left: 0; top: 0; z-index: 7; pointer-events: none; }
+  .fly svg { display: block; overflow: visible; }
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 8; }
+
+  /* ---------- Démo ---------- */
+  #intro {
+    position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 20, 22, .55); backdrop-filter: blur(3px);
+  }
+  #intro .card { background: #fff; border-radius: 18px; padding: 28px 30px; max-width: 440px; margin: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+  #intro h2 { margin: 0 0 10px; font-size: 22px; }
+  #intro p { margin: 0 0 20px; color: #55524c; line-height: 1.5; }
+  #intro button.cta { background: #1f1e1c; color: #fff; box-shadow: 0 5px 0 #000; }
+  #replay { position: fixed; left: 16px; bottom: 16px; z-index: 20; display: none; font-size: 14px; padding: 10px 16px; box-shadow: 0 4px 0 #9a9a9a; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="void">
+    <h1>Arrête de scroller.</h1>
+    <h1 class="red">Réponds à Claude.</h1>
+    <p id="since">Il t'a répondu il y a 34 secondes. Ton téléphone peut attendre.</p>
+    <button class="cta" id="back">OK, j'y retourne</button>
+  </div>
+
+  <div class="app" id="app">
+    <div class="side">
+      <div class="logo">Claude</div>
+      <div class="item on">Plan de lancement de l'offre</div>
+      <div class="item">Script Reel, accroches</div>
+      <div class="item">Audit tunnel de vente</div>
+      <div class="item">Relances prospects</div>
+      <div class="item">Idées de contenus novembre</div>
+    </div>
+    <div class="main">
+      <div class="pill"><span class="dot"></span><span class="pilltext">Claude a répondu</span></div>
+      <div class="chat">
+        <div class="user">Fais-moi le plan complet du lancement, avec le calendrier semaine par semaine.</div>
+        <div class="who">Claude</div>
+        <div class="reply">
+          <p>Voilà le plan complet, découpé en 4 semaines. Chaque semaine a un objectif, les contenus à publier et les chiffres à surveiller.</p>
+          <ol>
+            <li><b>Semaine 1 : Chauffer l'audience :</b> 3 Reels problème, 1 sondage en story.</li>
+            <li><b>Semaine 2 : Montrer la preuve :</b> 2 témoignages, 1 coulisse.</li>
+            <li><b>Semaine 3 : Ouvrir la liste d'attente :</b> lien en bio, mot-clé en commentaire.</li>
+            <li><b>Semaine 4 : Ouvrir les ventes :</b> 3 jours, 2 lives, relance le dernier soir.</li>
+          </ol>
+          <p>Il me manque une info pour finaliser les prix : tu veux garder l'offre à 497 € ou tester 397 € la première semaine ?</p>
+        </div>
+      </div>
+      <div class="input">Répondre à Claude…</div>
+    </div>
+  </div>
+
+  <svg id="cracks"><defs>
+    <radialGradient id="powder"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".5" stop-color="#fff" stop-opacity=".5"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs></svg>
+  <div id="shards"></div>
+  <div id="man"></div>
+  <div id="top"></div>
+  <div id="flash"></div>
+</div>
+
+<div id="intro"><div class="card">
+  <h2>Claude vient de répondre…</h2>
+  <p>Tu as lancé une tâche, puis tu as pris ton téléphone. Claude a fini et attend ta réponse. La démo démarre à 25 secondes d'attente, l'attaque se déclenche à 30.</p>
+  <button class="cta" id="go">▶ Lancer la démo (avec le son)</button>
+</div></div>
+<button class="cta" id="replay">↻ Rejouer</button>
+
+<script>
+(() => {
+  const SVG = 'http://www.w3.org/2000/svg';
+  const $ = (s) => document.querySelector(s);
+  const stage = $('#stage'), app = $('#app'), cracks = $('#cracks'), shardsBox = $('#shards');
+  const voidEl = $('#void'), topL = $('#top'), manBox = $('#man'), flashEl = $('#flash');
+  const pill = app.querySelector('.pill'), pillText = app.querySelector('.pilltext');
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const W = () => innerWidth, H = () => innerHeight;
+
+  const PH = {
+    arrive: ['Hé ho !', 'Toc toc !', "Y'a quelqu'un ?!"],
+    notice: ['Claude t\'a répondu !', 'Il a fini, Claude !', 'Ça fait 30 secondes !'],
+    p1: ['Lâche ce téléphone !', 'Arrête de scroller !', 'Lève la tête !'],
+    p2: ['Tu m\'entends ?!', 'Il attend, là !', 'Allô ?!'],
+    hammer: ['Bon. Tu l\'as cherché.', 'Plan B.', 'Très bien…'],
+    final: ['RÉPONDS À CLAUDE !', 'POSE CE TÉLÉPHONE !'],
+    leave: ['Bon retour !', 'Voilà. Au boulot.', 'Merci, c\'était pas si dur.']
+  };
+
+  /* ================= Sons générés ================= */
+  const S = {
+    ctx: null,
+    c() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; },
+    noise(c, dur, crackle) {
+      const b = c.createBuffer(1, Math.floor(c.sampleRate * dur), c.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (crackle ? (Math.random() < .06 ? 1 : .15) : 1);
+      const s = c.createBufferSource(); s.buffer = b; return s;
+    },
+    env(c, peak, dur, at = 0) { const g = c.createGain(), t = c.currentTime + at; g.gain.setValueAtTime(0.0001, c.currentTime); g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); return g; },
+    filt(c, type, f, q = 1) { const x = c.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = q; return x; },
+    play(kind) {
+      try {
+        const c = this.c(), out = c.createGain(); out.gain.value = .55; out.connect(c.destination);
+        const t = c.currentTime;
+        if (kind === 'whoosh') {
+          const n = this.noise(c, .35), f = this.filt(c, 'bandpass', 500, 2);
+          f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(2400, t + .3);
+          n.connect(f).connect(this.env(c, .9, .32)).connect(out); n.start();
+        } else if (kind === 'punch') {
+          const o = c.createOscillator(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(38, t + .2);
+          o.connect(this.env(c, 1.6, .26)).connect(out); o.start(); o.stop(t + .3);
+          const n = this.noise(c, .12); n.connect(this.filt(c, 'lowpass', 900)).connect(this.env(c, 1.2, .1)).connect(out); n.start();
+        } else if (kind === 'crack') {
+          const n = this.noise(c, .35, true); n.connect(this.filt(c, 'highpass', 2600)).connect(this.env(c, 1.8, .3)).connect(out); n.start();
+        } else if (kind === 'shatter') {
+          const n = this.noise(c, 1.6); n.connect(this.filt(c, 'bandpass', 3800, .7)).connect(this.env(c, 1.6, 1.4)).connect(out); n.start();
+          const l = this.noise(c, .5); l.connect(this.filt(c, 'lowpass', 400)).connect(this.env(c, 1.8, .45)).connect(out); l.start();
+          for (let i = 0; i < 34; i++) {
+            const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = rnd(2600, 8200);
+            const at = rnd(0, 1.3); o.connect(this.env(c, rnd(.05, .18), rnd(.08, .22), at)).connect(out);
+            o.start(t + at); o.stop(t + at + .3);
+          }
+        }
+      } catch (e) {}
+    }
+  };
+
+  /* ================= Le bonhomme ================= */
+  const VB = { x: -20, y: -40, w: 260, h: 340 };
+  const MAN_SVG = `<svg viewBox="${VB.x} ${VB.y} ${VB.w} ${VB.h}">
+    <g stroke="#111" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <g class="legs"><line class="legA" x1="100" y1="185" x2="70" y2="292"/><line class="legB" x1="100" y1="185" x2="130" y2="292"/></g>
+      <g class="torso">
+        <line x1="100" y1="86" x2="100" y2="185"/>
+        <g class="armL"><line x1="100" y1="110" x2="58" y2="166"/><circle cx="56" cy="170" r="10" fill="#fff" stroke-width="5"/></g>
+        <g class="armR">
+          <line x1="100" y1="110" x2="140" y2="165"/>
+          <circle class="fistR" cx="143" cy="169" r="11" fill="#fff" stroke-width="5"/>
+          <g class="hammerHeld">
+            <line x1="140" y1="165" x2="184" y2="226" stroke="#7a4520" stroke-width="10"/>
+            <g transform="translate(186 229) rotate(-36)"><rect x="-42" y="-18" width="84" height="36" rx="6" fill="#5d6166" stroke-width="5"/><line x1="-30" y1="-8" x2="20" y2="-8" stroke="#9aa0a6" stroke-width="4"/></g>
+          </g>
+        </g>
+        <circle cx="100" cy="50" r="36" fill="#fff"/>
+        <path d="M66 34 Q100 18 134 34" stroke="#e5484d" stroke-width="10"/>
+        <path d="M133 33 l22 -10 M133 37 l20 10" stroke="#e5484d" stroke-width="7"/>
+        <g class="brows" stroke-width="5"><line x1="78" y1="40" x2="94" y2="47"/><line x1="122" y1="40" x2="106" y2="47"/></g>
+        <circle cx="88" cy="54" r="4" fill="#111" stroke="none"/><circle cx="112" cy="54" r="4" fill="#111" stroke="none"/>
+        <path class="mShut" d="M88 72 Q100 64 112 72" stroke-width="5"/>
+        <ellipse class="mOpen" cx="100" cy="71" rx="11" ry="9" fill="#111" stroke-width="3"/>
+        <path class="mHappy" d="M84 66 Q100 82 116 66" stroke-width="5"/>
+      </g>
+    </g></svg>`;
+
+  const FIST = `<svg viewBox="0 0 120 120" width="150" height="150"><g stroke="#111" stroke-width="6" stroke-linejoin="round" stroke-linecap="round" fill="#fff">
+    <rect x="12" y="22" width="96" height="82" rx="28"/>
+    <path d="M37 24 V58 M60 22 V58 M84 24 V58" fill="none" stroke-width="5"/>
+    <path d="M12 66 Q32 56 54 68" fill="none" stroke-width="5"/></g></svg>`;
+
+  const HAMMER = `<svg viewBox="-80 -60 160 260" width="200" height="325"><g stroke="#111" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="-12" y="20" width="24" height="170" rx="8" fill="#7a4520"/>
+    <rect x="-72" y="-50" width="144" height="74" rx="10" fill="#5d6166"/>
+    <line x1="-56" y1="-32" x2="40" y2="-32" stroke="#a3a9af" stroke-width="5"/></g></svg>`;
+
+  let manEl = null, bubble = null;
+  function makeMan() {
+    manBox.innerHTML = MAN_SVG;
+    manEl = manBox;
+    const h = Math.min(H() * .5, 400), w = h * VB.w / VB.h;
+    manBox.style.width = w + 'px'; manBox.style.height = h + 'px';
+    manBox.querySelector('svg').setAttribute('width', w);
+    manBox.querySelector('svg').setAttribute('height', h);
+    manBox.className = '';
+  }
+  function manPt(lx, ly) {
+    const r = manBox.getBoundingClientRect(), s = r.width / VB.w;
+    return { x: r.left + (lx - VB.x) * s, y: r.top + (ly - VB.y) * s };
+  }
+  function say(text, big = false, ms = 1700) {
+    if (bubble) bubble.remove();
+    const b = bubble = document.createElement('div');
+    b.className = 'bubble' + (big ? ' big' : '');
+    b.textContent = text;
+    const r = manBox.getBoundingClientRect(), s = r.width / VB.w;
+    b.style.bottom = (r.height - (10 - VB.y) * s + 26) + 'px';
+    b.style.right = (r.width * .38) + 'px';
+    manBox.appendChild(b);
+    manBox.classList.add('talk');
+    setTimeout(() => { manBox.classList.remove('talk'); b.classList.add('out'); }, ms);
+    setTimeout(() => { b.remove(); if (bubble === b) bubble = null; }, ms + 250);
+  }
+
+  /* ================= Effets ================= */
+  function starPath(n, r1, r2) {
+    let d = '';
+    for (let i = 0; i < n * 2; i++) {
+      const r = i % 2 ? r2 * rnd(.8, 1.1) : r1 * rnd(.88, 1.12), a = Math.PI * i / n;
+      d += (i ? 'L' : 'M') + (r * Math.cos(a)).toFixed(1) + ' ' + (r * Math.sin(a)).toFixed(1);
+    }
+    return d + 'Z';
+  }
+  function burst(x, y, text, size = 130, fill = '#ffe14d', hold = 700) {
+    const el = document.createElement('div');
+    el.className = 'burst';
+    el.style.cssText = `left:${x}px;top:${y}px;width:${size}px;height:${size}px;font-size:${Math.round(size * .24)}px;--rot:${rnd(-14, 14)}deg`;
+    el.innerHTML = `<svg viewBox="-60 -60 120 120" width="${size}" height="${size}"><path d="${starPath(13, 58, 33)}" fill="${fill}" stroke="#111" stroke-width="4" stroke-linejoin="round"/></svg>` + (text ? `<span>${text}</span>` : '');
+    topL.appendChild(el);
+    setTimeout(() => el.classList.add('out'), hold);
+    setTimeout(() => el.remove(), hold + 400);
+  }
+  function shake(big) {
+    stage.classList.remove('shake', 'bigshake'); void stage.offsetWidth;
+    stage.classList.add(big ? 'bigshake' : 'shake');
+  }
+  function flash() { flashEl.animate([{ opacity: 0 }, { opacity: .85 }, { opacity: 0 }], { duration: 220 }); }
+
+  function addPath(g, pts) {
+    const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+    for (const cls of ['dk', 'lt']) {
+      const p = document.createElementNS(SVG, 'path');
+      p.setAttribute('d', d); p.setAttribute('class', cls);
+      if (cls === 'lt') p.setAttribute('transform', 'translate(1 1)');
+      g.appendChild(p);
+      const L = p.getTotalLength();
+      p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+      p.getBoundingClientRect();
+      p.style.transition = `stroke-dashoffset ${rnd(90, 200)}ms ease-out`;
+      p.style.strokeDashoffset = 0;
+    }
+  }
+  function crack(cx, cy, power = 1) {
+    const g = document.createElementNS(SVG, 'g');
+    const n = Math.round(rnd(9, 13) + power * 3), rays = [];
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2 + rnd(-.18, .18), L = rnd(120, 340) * power;
+      const pts = [[cx, cy]]; let r = 0, a = a0;
+      while (r < L) { r += rnd(20, 46); a += rnd(-.13, .13); pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+      rays.push({ L, pts });
+      addPath(g, pts);
+      if (Math.random() < .55) {
+        const k = 1 + Math.floor((pts.length - 1) * rnd(.3, .7)), [bx, by] = pts[k];
+        let aa = a0 + rnd(.35, .75) * (Math.random() < .5 ? -1 : 1), br = 0;
+        const bl = rnd(40, 130) * power, bp = [[bx, by]];
+        while (br < bl) { br += rnd(16, 34); aa += rnd(-.15, .15); bp.push([bx + Math.cos(aa) * br, by + Math.sin(aa) * br]); }
+        addPath(g, bp);
+      }
+    }
+    const at = (ray, R) => ray.pts.find((p) => Math.hypot(p[0] - cx, p[1] - cy) >= R) || ray.pts[ray.pts.length - 1];
+    [rnd(26, 40) * power, rnd(75, 115) * power, rnd(150, 200) * power].forEach((R) => {
+      for (let i = 0; i < n; i++) {
+        const r1 = rays[i], r2 = rays[(i + 1) % n];
+        if (Math.random() < .3 || r1.L < R || r2.L < R) continue;
+        const p1 = at(r1, R), p2 = at(r2, R);
+        addPath(g, [p1, [(p1[0] + p2[0]) / 2 + rnd(-7, 7), (p1[1] + p2[1]) / 2 + rnd(-7, 7)], p2]);
+      }
+    });
+    const c = document.createElementNS(SVG, 'circle');
+    c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 26 * power); c.setAttribute('fill', 'url(#powder)');
+    g.appendChild(c);
+    cracks.appendChild(g);
+  }
+
+  let shardAnims = [];
+  function shatter(cx, cy) {
+    const n = 16, A = [];
+    for (let i = 0; i < n; i++) A.push((i / n) * Math.PI * 2 + rnd(-.1, .1));
+    const R = [0, rnd(60, 85), rnd(160, 210), rnd(310, 390), rnd(520, 640), Math.hypot(W(), H()) * 1.15];
+    const V = A.map((a) => R.map((r, j) => {
+      if (j === 0) return [cx, cy];
+      const aa = j === R.length - 1 ? a : a + rnd(-.07, .07), rr = j === R.length - 1 ? r : r + rnd(-18, 18);
+      return [cx + Math.cos(aa) * rr, cy + Math.sin(aa) * rr];
+    }));
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < R.length - 1; j++) {
+        const i2 = (i + 1) % n;
+        const poly = [V[i][j], V[i2][j], V[i2][j + 1], V[i][j + 1]];
+        const pc = poly.map((p) => p[0].toFixed(1) + 'px ' + p[1].toFixed(1) + 'px').join(',');
+        const pts = poly.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+        const gx = poly.reduce((s, p) => s + p[0], 0) / 4, gy = poly.reduce((s, p) => s + p[1], 0) / 4;
+        const d = document.createElement('div');
+        d.className = 'shard';
+        d.style.clipPath = `polygon(${pc})`;
+        d.style.transformOrigin = `${gx}px ${gy}px`;
+        const clone = app.cloneNode(true); clone.removeAttribute('id');
+        d.appendChild(clone);
+        d.insertAdjacentHTML('beforeend', `<svg><polygon class="e1" points="${pts}"/><polygon class="e2" points="${pts}"/></svg>`);
+        frag.appendChild(d);
+        const dist = Math.hypot(gx - cx, gy - cy) || 1, ux = (gx - cx) / dist, uy = (gy - cy) / dist;
+        const push = rnd(6, 16);
+        const bulge = `translate(${ux * push}px, ${uy * push}px) rotate(${rnd(-3, 3)}deg)`;
+        const fall = `perspective(1000px) translate(${ux * rnd(40, 220)}px, ${H() * 1.25 + rnd(0, 300)}px) rotate(${rnd(-160, 160)}deg) rotateX(${rnd(-70, 70)}deg) rotateY(${rnd(-70, 70)}deg)`;
+        const delay = j <= 1 ? rnd(0, 120) : j === R.length - 2 ? rnd(250, 1500) : rnd(80, 600);
+        shardAnims.push({ el: d, frames: [
+          { transform: 'perspective(1000px) translate(0,0)', offset: 0 },
+          { transform: 'perspective(1000px) ' + bulge, offset: .12, easing: 'cubic-bezier(.55,0,1,.5)' },
+          { transform: fall, offset: 1 }
+        ], opts: { duration: rnd(1300, 1900), delay, fill: 'both' } });
+      }
+    }
+    shardsBox.appendChild(frag);
+    app.style.visibility = 'hidden';
+    cracks.style.visibility = 'hidden';
+    shardAnims = shardAnims.map((s) => s.el.animate(s.frames, s.opts));
+  }
+
+  async function zoomTo(el, from, to, s0, s1, r0, r1, ms) {
+    topL.appendChild(el);
+    const a = el.animate([
+      { transform: `translate(${from.x}px, ${from.y}px) translate(-50%, -50%) scale(${s0}) rotate(${r0}deg)` },
+      { transform: `translate(${to.x}px, ${to.y}px) translate(-50%, -50%) scale(${s1}) rotate(${r1}deg)` }
+    ], { duration: ms, easing: 'cubic-bezier(.55,0,1,1)', fill: 'forwards' });
+    await a.finished;
+    return a;
+  }
+  function makeFly(html) { const f = document.createElement('div'); f.className = 'fly'; f.innerHTML = html; return f; }
+
+  async function punch(target, label) {
+    manBox.classList.add('windup'); S.play('whoosh');
+    await wait(240);
+    const hand = manPt(150, 40);
+    manBox.classList.remove('windup'); manBox.classList.add('punch');
+    const f = makeFly(FIST);
+    await zoomTo(f, hand, target, .2, 1.45, -25, 0, 150);
+    crack(target.x, target.y, 1); shake(); S.play('punch'); S.play('crack');
+    burst(target.x + rnd(-50, 50), target.y - rnd(70, 110), label, 130);
+    await wait(130);
+    f.animate([{ opacity: 1 }, { opacity: 0, transform: `translate(${hand.x}px, ${hand.y}px) translate(-50%, -50%) scale(.3)` }], { duration: 200, fill: 'forwards' })
+      .finished.then(() => f.remove());
+    await wait(120);
+    manBox.classList.remove('punch');
+  }
+
+  /* ================= Scénario ================= */
+  let idleStart = 0, phase = 'idle', timer = null;
+  const fmt = (s) => '0:' + String(Math.floor(s)).padStart(2, '0');
+
+  function tick() {
+    const s = (performance.now() - idleStart) / 1000;
+    if (phase === 'waiting' || phase === 'attack') {
+      pillText.textContent = `Claude a répondu · sans réponse depuis ${fmt(s)}`;
+      pill.classList.toggle('late', s >= 27);
+    }
+    if (phase === 'waiting' && s >= 30) { phase = 'attack'; attack(); }
+  }
+
+  async function attack() {
+    makeMan();
+    const target = W() * .62;
+    manBox.style.transition = 'none';
+    manBox.style.left = (W() + 40) + 'px';
+    void manBox.offsetWidth;
+    manBox.classList.add('running');
+    manBox.style.transition = 'left 1s cubic-bezier(.2,.7,.3,1)';
+    manBox.style.left = target + 'px';
+    await wait(1000);
+    manBox.classList.remove('running'); manBox.classList.add('hop');
+    say(pick(PH.arrive)); await wait(1200);
+    manBox.classList.remove('hop');
+    say(pick(PH.notice)); await wait(1500);
+
+    say(pick(PH.p1), false, 1400);
+    await punch({ x: W() * rnd(.25, .4), y: H() * rnd(.22, .4) }, pick(['BAM !', 'PAF !']));
+    await wait(1100);
+    say(pick(PH.p2), false, 1300);
+    await punch({ x: W() * rnd(.5, .62), y: H() * rnd(.15, .32) }, pick(['BING !', 'POW !']));
+    await wait(350);
+    await punch({ x: W() * rnd(.3, .5), y: H() * rnd(.5, .62) }, 'PAF !');
+    await wait(900);
+
+    say(pick(PH.hammer), false, 1400);
+    manBox.classList.add('armed'); await wait(1000);
+    manBox.classList.add('raise'); S.play('whoosh'); await wait(650);
+    const hand = manPt(150, -20), center = { x: W() * .45, y: H() * .44 };
+    manBox.classList.remove('armed', 'raise'); manBox.classList.add('punch');
+    const hm = makeFly(HAMMER);
+    await zoomTo(hm, hand, center, .25, 1.5, -95, 8, 230);
+    flash(); crack(center.x, center.y, 2.1); shake(true); S.play('punch'); S.play('crack');
+    burst(center.x + 40, center.y - 150, 'CRAAAAC !', 260, '#ffe14d', 900);
+    await wait(420);
+    hm.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' }).finished.then(() => hm.remove());
+    manBox.classList.remove('punch');
+    S.play('shatter'); shatter(center.x, center.y); shake(true);
+    await wait(500);
+    say(pick(PH.final), true, 1300);
+    await wait(1550);
+
+    const secs = Math.round((performance.now() - idleStart) / 1000);
+    $('#since').textContent = `Il t'a répondu il y a ${secs} secondes. Ton téléphone peut attendre.`;
+    voidEl.classList.add('show');
+    phase = 'broken';
+  }
+
+  async function repair() {
+    if (phase !== 'broken') return;
+    phase = 'repair';
+    voidEl.classList.remove('show');
+    S.play('whoosh');
+    shardAnims.forEach((a) => { a.playbackRate = -2.6; a.play(); });
+    await wait(1000);
+    shardAnims = []; shardsBox.innerHTML = '';
+    [...cracks.querySelectorAll('g')].forEach((g) => g.remove());
+    app.style.visibility = ''; cracks.style.visibility = '';
+    pill.classList.remove('late'); pill.classList.add('ok');
+    pillText.textContent = 'Tu as répondu ✓';
+    manBox.classList.add('happy');
+    say(pick(PH.leave), false, 1500);
+    await wait(1500);
+    manBox.classList.add('running');
+    manBox.style.transition = 'left .9s ease-in';
+    manBox.style.left = (W() + 60) + 'px';
+    await wait(950);
+    manBox.innerHTML = ''; manBox.className = '';
+    phase = 'done';
+    $('#replay').style.display = 'block';
+  }
+
+  function start() {
+    S.c();
+    $('#intro').style.display = 'none';
+    $('#replay').style.display = 'none';
+    pill.classList.remove('ok', 'late');
+    idleStart = performance.now() - 25000;
+    phase = 'waiting';
+    clearInterval(timer); timer = setInterval(tick, 200); tick();
+  }
+
+  $('#go').addEventListener('click', start);
+  $('#replay').addEventListener('click', start);
+  $('#back').addEventListener('click', repair);
+  if (location.search.includes('auto')) { $('#intro').style.display = 'none'; start(); }
+})();
+</script>
+</body>
+</html>
