@@ -131,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         if fm.fileExists(atPath: demoFlag) {
             try? fm.removeItem(atPath: demoFlag)
-            if !showActive { startShow(demo: true, waited: 34) }
+            if !showActive { startShow(demo: true, waited: 34, title: "Démo", others: 0) }
             return
         }
 
@@ -143,50 +143,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             }
             let cancellable = isDemo ? jsPhase == "broken"
                                      : ["attack", "shattering", "broken"].contains(jsPhase)
-            let replied = !isDemo && newestWaiting() == nil
+            let replied = !isDemo && waitingInfo() == nil
             if cancellable && (idle < 1.0 || replied) { js("ecran.userBack()") }
             return
         }
 
         followScreen()
-        guard !paused, !screenLocked(), let newest = newestWaiting() else { return }
+        guard !paused, !screenLocked(), let info = waitingInfo() else { return }
         let now = Date().timeIntervalSince1970
         let d = Double(delay)
-        if newest > handledStamp && now - newest >= d && idle >= d {
-            handledStamp = newest
-            startShow(demo: false, waited: now - newest)
+        if info.newest > handledStamp && now - info.newest >= d && idle >= d {
+            handledStamp = info.newest
+            startShow(demo: false, waited: now - info.newest, title: info.title, others: info.others)
         }
     }
 
-    private func startShow(demo: Bool, waited: Double) {
+    private func startShow(demo: Bool, waited: Double, title: String, others: Int) {
         isDemo = demo
         showActive = true
         showStartedAt = Date()
         jsPhase = "attack"
         followScreen()
-        log(demo ? "démo" : "attaque : Claude attend depuis \(Int(waited)) s")
+        log(demo ? "démo" : "attaque : « \(title) » attend depuis \(Int(waited)) s")
         Task { @MainActor in
             let shot = await self.captureScreen()
             self.js(shot.map { "ecran.setShot('\($0)')" } ?? "ecran.setShot(null)")
-            self.js("ecran.trigger(\(Int(waited)))")
+            self.js("ecran.trigger(\(Int(waited)), \(self.jsString(title)), \(others))")
         }
     }
 
-    /// Moment de la réponse de Claude la plus récente encore sans réponse, ou nil.
-    private func newestWaiting() -> Double? {
+    /// La conversation Claude la plus récente qui attend une réponse : quand elle a fini, son titre,
+    /// et combien d'autres conversations attendent aussi. nil si aucune n'attend.
+    /// Chaque fichier contient l'heure sur la première ligne et le titre sur la deuxième.
+    private func waitingInfo() -> (newest: Double, title: String, others: Int)? {
         let fm = FileManager.default
         guard let names = try? fm.contentsOfDirectory(atPath: waitingDir) else { return nil }
         let now = Date().timeIntervalSince1970
-        var newest: Double?
+        var best: (newest: Double, title: String)?
+        var count = 0
         for name in names where !name.hasPrefix(".") {
             let path = (waitingDir as NSString).appendingPathComponent(name)
-            let text = (try? String(contentsOfFile: path, encoding: .utf8))?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard let t = Double(text) else { try? fm.removeItem(atPath: path); continue }
+            let lines = ((try? String(contentsOfFile: path, encoding: .utf8)) ?? "")
+                .split(separator: "\n", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            guard let first = lines.first, let t = Double(first) else { try? fm.removeItem(atPath: path); continue }
             if now - t > 12 * 3600 { try? fm.removeItem(atPath: path); continue }
-            newest = max(newest ?? t, t)
+            count += 1
+            let title = lines.count > 1 && !lines[1].isEmpty ? lines[1] : "Une conversation"
+            if best == nil || t > best!.newest { best = (t, title) }
         }
-        return newest
+        guard let b = best else { return nil }
+        return (b.newest, b.title, count - 1)
+    }
+
+    private func jsString(_ s: String) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: [s]),
+              let text = String(data: data, encoding: .utf8) else { return "\"\"" }
+        return String(text.dropFirst().dropLast())
     }
 
     /// Secondes depuis le dernier mouvement de souris ou appui sur une touche.
@@ -310,7 +323,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     @objc private func runDemo() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self, !self.showActive else { return }
-            self.startShow(demo: true, waited: 34)
+            self.startShow(demo: true, waited: 34, title: "Démo", others: 0)
         }
     }
 

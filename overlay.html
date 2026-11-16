@@ -425,7 +425,7 @@
   });
 
   /* ================= Scénario ================= */
-  let run = 0, phase = 'idle', waitStart = 0;
+  let run = 0, phase = 'idle', waitStart = 0, convTitle = 'Une conversation', otherCount = 0;
   const secs = () => Math.round((performance.now() - waitStart) / 1000);
   function setPhase(p) { phase = p; post('phase', p); }
 
@@ -459,7 +459,8 @@
     await wait(950);
   }
 
-  async function attack(waited) {
+  async function attack(waited, title, others) {
+    convTitle = title || 'Une conversation'; otherCount = others || 0;
     cleanup();
     const my = ++run, live = () => run === my;
     waitStart = performance.now() - (waited || 30) * 1000;
@@ -471,7 +472,7 @@
     await knock(k); await wait(200); if (!live()) return;
     await knock({ x: k.x + 8, y: k.y + 6 }); await wait(700); if (!live()) return;
     manBox.classList.remove('hop');
-    say(`Claude t'a répondu il y a ${secs()} s !`, false, 1700); await wait(1900); if (!live()) return;
+    say(`« ${convTitle} » t'a répondu il y a ${secs()} s !`, false, 2300); await wait(2500); if (!live()) return;
 
     say(pick(PH.p1), false, 1400);
     await punch({ x: W() * rnd(.22, .38), y: H() * rnd(.2, .38) }, pick(['BAM !', 'PAF !'])); if (!live()) return;
@@ -500,7 +501,8 @@
     say(pick(PH.final), true, 1300);
     await wait(1550); if (!live()) return;
 
-    $('#since').textContent = `Il t'a répondu il y a ${secs()} secondes. Ton téléphone peut attendre.`;
+    const more = otherCount > 0 ? ` (et ${otherCount} autre${otherCount > 1 ? 's' : ''} conversation${otherCount > 1 ? 's' : ''})` : '';
+    $('#since').textContent = `Claude t'a répondu dans « ${convTitle} »${more} il y a ${secs()} secondes. Ton téléphone peut attendre.`;
     voidEl.classList.add('show');
     setPhase('broken');
   }
@@ -537,7 +539,7 @@
   }
 
   window.ecran = {
-    trigger(waited) { attack(waited); },
+    trigger(waited, title, others) { attack(waited, title, others); },
     userBack,
     setShot,
     reset() { run++; cleanup(); setPhase('done'); },
@@ -554,7 +556,7 @@
     [...document.querySelectorAll('#fake p')].forEach((p, i) => x.fillText(p.textContent.slice(0, 90), W() * .12, 96 + i * 48));
     setShot(c.toDataURL('image/jpeg', .9));
   }
-  if (q.includes('auto')) setTimeout(() => attack(34), 600);
+  if (q.includes('auto')) setTimeout(() => attack(34, 'Plan de lancement', 1), 600);
   if (q.includes('back')) {
     const iv = setInterval(() => { if (phase === 'broken') { clearInterval(iv); setTimeout(userBack, 2500); } }, 200);
   }

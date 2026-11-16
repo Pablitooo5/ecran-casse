@@ -44,7 +44,7 @@ Ensuite, clique sur l'icône **🔨** dans la barre des menus, puis sur **Lancer
 
 1. Des *hooks* Claude Code notent le moment où Claude finit une réponse, et l'effacent dès que tu réponds ou que Claude se remet au travail.
 2. L'app regarde depuis combien de temps la souris et le clavier n'ont pas bougé.
-3. Claude attend depuis 30 s **et** personne n'a touché l'ordinateur depuis 30 s : le bonhomme arrive. Il ne vient qu'une fois par réponse de Claude.
+3. Claude attend depuis 30 s **et** personne n'a touché l'ordinateur depuis 30 s : le bonhomme arrive. Il ne vient qu'une fois par réponse de Claude. Il te dit **quelle conversation** t'attend (son titre), et combien d'autres attendent aussi.
 4. Dès que tu bouges, il répare l'écran et s'en va. Les clics traversent toujours ses dessins.
 
 Rien n'est envoyé sur Internet. Tout tient dans `~/.claude/ecran-casse` et dans les hooks de `~/.claude/settings.json`. Une copie de tes réglages est gardée à côté (`settings.json.avant-ecran-casse.bak`).
