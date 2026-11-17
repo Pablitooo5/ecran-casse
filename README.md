@@ -61,6 +61,7 @@ Projet perso et non officiel, sans lien avec Anthropic. « Claude » et « Claud
 Licence MIT : tu peux le modifier et le partager librement.
 
 Du même auteur :
+- [Toc Toc](https://github.com/Pablitooo5/toc-toc) : un mini Claude vient toquer à ton écran quand Claude t'a répondu et que tu ne regardes pas.
 - [Alerte Contexte](https://github.com/Pablitooo5/alerte-contexte) : un chef de chantier passe avec une pancarte quand ta conversation Claude Code devient trop lourde.
 - [Le Videur](https://github.com/Pablitooo5/le-videur) : un videur arrête Claude avant une action dangereuse et te demande ton accord.
 - [Travail Terminé](https://github.com/Pablitooo5/travail-termine) : un mini personnage sort en bas à gauche avec une pancarte quand Claude finit une tâche.
